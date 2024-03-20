@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter/widgets.dart' hide Element;
 import 'package:go_router/go_router.dart';
@@ -117,6 +118,98 @@ abstract class ServiceUtils {
       };
     }).toList();
     return results;
+  }
+
+  static Future<String?> getGeniusLyrics(
+      {required String title, required List<String> artists}) async {
+    //Requires a non-blacklisted, valid User Agent. Or else, cloudflare might throw a 403.
+    Map<String, String> headers = {
+      HttpHeaders.userAgentHeader:
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/117.0.0.0 Safari/537.36 Edg/117.0.2045.4",
+    };
+
+    final searchResultResponse = await http.get(
+        Uri.parse(
+            "https://genius.com/api/search/multi?q=${title.replaceAll(RegExp(r"(\(.*\))"), "")} ${artists[0]}"),
+        headers: headers);
+    final searchResultObj = jsonDecode(searchResultResponse.body);
+    String topResultPath;
+    try {
+      topResultPath = searchResultObj["response"]["sections"][0]["hits"][0]
+          ["result"]["path"] as String;
+      logger.t("topResultUrl: https://genius.com$topResultPath");
+    } catch (e) {
+      //logger.e(e);
+      throw "topResultPath not found!";
+    }
+    final lyrics =
+        await extractLyrics(Uri.parse("https://genius.com$topResultPath"));
+
+    return lyrics?.trim();
+  }
+
+  static Future<String?> getAZLyrics(
+      {required String title, required List<String> artists}) async {
+    const Map<String, String> headers = {
+      HttpHeaders.userAgentHeader:
+          "Mozilla/5.0 (Linux i656 ; en-US) AppleWebKit/601.49 (KHTML, like Gecko) Chrome/51.0.1145.334 Safari/600"
+    };
+
+    //Will throw error 400 when you request the script without the host header
+    const Map<String, String> headersForScript = {
+      HttpHeaders.userAgentHeader:
+          "Mozilla/5.0 (Linux i656 ; en-US) AppleWebKit/601.49 (KHTML, like Gecko) Chrome/51.0.1145.334 Safari/600",
+      HttpHeaders.hostHeader: "www.azlyrics.com",
+    };
+
+    final azLyricsGeoScript = await http.get(
+        Uri.parse("https://www.azlyrics.com/geo.js"),
+        headers: headersForScript);
+
+    RegExp scriptValueRegex = RegExp(r'\.setAttribute\("value", "(.*)"\);');
+    RegExp scriptNameRegex = RegExp(r'\.setAttribute\("name", "(.*)"\);');
+    final String? v =
+        scriptValueRegex.firstMatch(azLyricsGeoScript.body)?.group(1);
+    final String? x =
+        scriptNameRegex.firstMatch(azLyricsGeoScript.body)?.group(1);
+
+    logger.t("Additional URL params: $x=$v");
+
+    final suggestionUrl = Uri.parse(
+        "https://search.azlyrics.com/suggest.php?q=${title.replaceAll(RegExp(r"(\(.*\))"), "")} ${artists[0]}&${x.toString()}=${v.toString()}");
+
+    final searchResponse = await http.get(suggestionUrl, headers: headers);
+    if (searchResponse.statusCode != 200) {
+      throw "searchResponse = ${searchResponse.statusCode}";
+    }
+
+    final Map searchResult = jsonDecode(searchResponse.body);
+
+    String bestLyricsURL;
+
+    try {
+      bestLyricsURL = searchResult["songs"][0]["url"];
+      logger.t("bestLyricsURL: $bestLyricsURL");
+    } catch (e) {
+      throw "No best Lyrics URL";
+    }
+
+    final lyricsResponse =
+        await http.get(Uri.parse(bestLyricsURL), headers: headers);
+
+    if (lyricsResponse.statusCode != 200) {
+      throw "lyricsResponse = ${lyricsResponse.statusCode}";
+    }
+
+    var document = parser.parse(lyricsResponse.body);
+    var lyricsDiv = document.querySelectorAll(
+        "body > div.container.main-page > div.row > div.col-xs-12.col-lg-8.text-center > div");
+
+    if (lyricsDiv.isEmpty) throw "lyricsDiv is empty";
+
+    final String lyrics = lyricsDiv[4].text;
+
+    return lyrics.trim();
   }
 
   @Deprecated("In favor spotify lyrics api, this isn't needed anymore")
