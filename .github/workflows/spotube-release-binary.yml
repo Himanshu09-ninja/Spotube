@@ -117,7 +117,7 @@ jobs:
           CHANNEL: ${{inputs.channel}}
           DOTENV: ${{secrets.DOTENV_RELEASE}}
       
-      - uses: actions/upload-artifact@v3
+      - uses: actions/upload-artifact@v4
         with:
           if-no-files-found: error
           name: Spotube-Release-Binaries
@@ -154,7 +154,7 @@ jobs:
         run: |
           echo "PUBSPEC_VERSION=$(grep -oP 'version:\s*\K[^+]+(?=\+)' pubspec.yaml)" >> $GITHUB_ENV
 
-      - uses: actions/upload-artifact@v3
+      - uses: actions/upload-artifact@v4
         with:
           if-no-files-found: error
           name: Spotube-Release-Binaries
