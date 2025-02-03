@@ -65,7 +65,7 @@ dependencies:
   media_kit_libs_audio: ^1.0.4
   metadata_god: ^1.0.0
   mime: ^1.0.2
-  package_info_plus: ^6.0.0
+  package_info_plus: ^8.2.0
   palette_generator: ^0.3.3
   path: ^1.9.0
   path_provider: ^2.1.3
